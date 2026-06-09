@@ -1,0 +1,11 @@
+# GCP Service Account Keys
+*.json
+
+# Python environments and cache
+__pycache__/
+.env
+venv/
+*.pyc
+
+# Mac OS files
+.DS_Store
