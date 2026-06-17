@@ -8,4 +8,6 @@ venv/
 *.pyc
 
 # Mac OS files
+.DS_Store.env
 .DS_Store
+**/.DS_Store

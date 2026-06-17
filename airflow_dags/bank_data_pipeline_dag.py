@@ -2,53 +2,66 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-# 🌟 从你的 bank_scripts 文件夹中精确导入这四个函数
-# （假设你脚本里的主函数名字是下面这些，如果名字不一样，请替换成你实际定义的函数名）
-from scripts.bank_scripts.bank_generate import generate_daily_bank_customers
-from scripts.bank_scripts.move_to_bank_staging import move_bank_data_to_staging
-from scripts.bank_scripts.bank_encrypt_upload_gcs import encrypt_and_upload_bank_data
-from scripts.bank_scripts.bank_staging_to_archive import move_staging_to_archive
-
-# 1. 基础配置
 default_args = {
     'owner': 'davy',
-    'start_date': datetime(2026, 6, 1), 
+    'start_date': datetime(2024, 1, 1),
     'retries': 1,
-    'retry_delay': timedelta(minutes=1),
+    'retry_delay': timedelta(minutes=5),
 }
 
-# 2. 实例化 DAG
+# Wrapper functions - import inside function for better isolation
+# (包装函数 - 在函数内部 import，避免单个脚本报错导致整个 DAG 加载失败)
+
+def run_generate():
+    """Generate mock bank customer dimension records (生成模拟银行客户维度数据)"""
+    from scripts.bank_scripts.bank_generate import generate_daily_bank_customers
+    return generate_daily_bank_customers()
+
+def run_move_to_staging():
+    """Move files from landing to staging (将文件从 landing 移动到 staging)"""
+    from scripts.bank_scripts.bank_moveto_staging import transfer_landing_to_staging
+    return transfer_landing_to_staging()
+
+def run_encrypt_and_upload():
+    """Hash sensitive columns and upload to GCS (哈希敏感字段并上传至 GCS)"""
+    from scripts.bank_scripts.bank_upload_encrypted_gcs import encrypt_and_upload_to_gcs
+    return encrypt_and_upload_to_gcs()
+
+def run_archive():
+    """Archive original unencrypted files (归档原始未加密文件)"""
+    from scripts.bank_scripts.bank_archive import archive_original_data
+    return archive_original_data()
+
+
 with DAG(
-    'bank_encryption_pipeline_python_v1', 
-    default_args=default_args, 
-    schedule='*/10 * * * *', # 手动触发 
-    catchup=False,
-    tags=['bank', 'python_operator', 'microservice']
+    dag_id='bank_data_security_pipeline_v2',
+    default_args=default_args,
+    schedule='@daily',          # Run once per day (每天运行一次)
+    catchup=False,              # Do not backfill missed runs (不补跑历史任务)
+    max_active_runs=1,          # Prevent concurrent runs (防止并发冲突)
+    tags=['bank', 'pipeline'],  # Tags for filtering in Airflow UI (用于 UI 筛选的标签)
 ) as dag:
 
-    # 步骤 1：生成源数据
     step_1 = PythonOperator(
         task_id='generate_landing_data',
-        python_callable=generate_daily_bank_customers
+        python_callable=run_generate,
     )
 
-    # 步骤 2：转移至 Staging 区
     step_2 = PythonOperator(
         task_id='move_data_to_staging',
-        python_callable=move_bank_data_to_staging
+        python_callable=run_move_to_staging,
     )
 
-    # 步骤 3：调用加密微服务并直飞云端
     step_3 = PythonOperator(
         task_id='encrypt_and_upload_to_gcs',
-        python_callable=encrypt_and_upload_bank_data
+        python_callable=run_encrypt_and_upload,
     )
 
-    # 步骤 4：清理战场，移入归档区
     step_4 = PythonOperator(
         task_id='archive_staging_data',
-        python_callable=move_staging_to_archive
+        python_callable=run_archive,
     )
 
-    # 完美的单线拓扑关系
+    # Linear execution order - must run in sequence to prevent data loss
+    # (线性执行顺序 - 必须按顺序执行，防止数据丢失)
     step_1 >> step_2 >> step_3 >> step_4
