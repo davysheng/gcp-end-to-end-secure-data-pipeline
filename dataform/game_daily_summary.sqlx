@@ -1,0 +1,44 @@
+-- Config block: tells Dataform where to create this table
+-- (配置块：告诉 Dataform 把这张表建在哪里)
+-- type: Create as a permanent table (建为永久表)
+-- schema: Target dataset (目标数据集)
+-- name: Target table name (目标表名)
+config {
+  type: "table",
+  schema: "dj_project1_game_bdp",
+  name: "game_daily_summary",
+  description: "Daily aggregated game stats per player"
+}
+
+-- Source: raw game_logs table (数据来源：原始 game_logs 表)
+SELECT
+  -- Extract date from timestamp for daily grouping (从时间戳提取日期，用于按天聚合)
+  DATE(match_timestamp) AS match_date,
+
+  player_id,
+
+  -- Count of matches played (比赛场数)
+  COUNT(match_id) AS total_matches,
+
+  -- Total and average damage dealt (总伤害量和场均伤害)
+  SUM(damage_dealt)               AS total_damage,
+  ROUND(AVG(damage_dealt), 2)     AS avg_damage_per_match,
+
+  -- Total and average match duration in minutes (总时长和场均时长，转换为分钟)
+  SUM(match_duration_secs)                          AS total_duration_secs,
+  ROUND(AVG(match_duration_secs) / 60.0, 2)        AS avg_duration_mins
+
+FROM
+  -- ref() is Dataform's way to reference other tables safely
+  -- (ref() 是 Dataform 引用其他表的方式，会自动处理依赖关系)
+  -- For raw tables not managed by Dataform, use full path directly
+  -- (对于不在 Dataform 管理下的原始表，直接用完整路径)
+  `project-fe0250dd-e466-45c7-92d.dj_project1_game.game_logs`
+
+GROUP BY
+  match_date,
+  player_id
+
+ORDER BY
+  match_date DESC,
+  total_matches DESC

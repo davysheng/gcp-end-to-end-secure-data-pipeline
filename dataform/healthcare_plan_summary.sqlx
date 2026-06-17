@@ -1,0 +1,31 @@
+config {
+  type: "table",
+  schema: "dj_project1_healthcare_bdp",
+  name: "healthcare_plan_summary",
+  description: "Patient distribution by insurance plan (active records only)"
+}
+
+SELECT
+  insurance_plan,
+
+  -- Count of active patients per plan (每个保险计划的活跃患者数)
+  COUNT(patient_uuid)             AS patient_count,
+
+  -- Percentage of total active patients (占总活跃患者的百分比)
+  ROUND(
+    COUNT(patient_uuid) * 100.0 / SUM(COUNT(patient_uuid)) OVER (),
+    2
+  )                               AS pct_of_total
+
+FROM
+  `project-fe0250dd-e466-45c7-92d.dj_project1_healthcare.healthcare_records`
+
+WHERE
+  -- Active records only (只看当前有效记录)
+  end_date = '9999-12-31'
+
+GROUP BY
+  insurance_plan
+
+ORDER BY
+  patient_count DESC

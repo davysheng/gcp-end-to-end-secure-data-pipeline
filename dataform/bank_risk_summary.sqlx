@@ -1,0 +1,36 @@
+config {
+  type: "table",
+  schema: "dj_project1_bank_bdp",
+  name: "bank_risk_summary",
+  description: "Customer distribution by risk level and account tier (active records only)"
+}
+
+SELECT
+  -- Only look at currently active customers (只看当前有效客户，SCD Type 2 的标准过滤方式)
+  -- end_date = '9999-12-31' is the sentinel value meaning "still active"
+  -- (哨兵值，表示该记录仍然有效)
+  risk_level,
+  account_tier,
+
+  -- Count of active customers per segment (每个细分的活跃客户数)
+  COUNT(customer_id)              AS customer_count,
+
+  -- Credit score stats per segment (各细分的信用评分统计)
+  ROUND(AVG(credit_score), 2)     AS avg_credit_score,
+  MIN(credit_score)               AS min_credit_score,
+  MAX(credit_score)               AS max_credit_score
+
+FROM
+  `project-fe0250dd-e466-45c7-92d.dj_project1_bank.bank_customers`
+
+WHERE
+  -- Filter for active records only (过滤出当前有效记录)
+  end_date = '9999-12-31'
+
+GROUP BY
+  risk_level,
+  account_tier
+
+ORDER BY
+  risk_level,
+  account_tier
